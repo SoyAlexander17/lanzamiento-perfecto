@@ -1,35 +1,119 @@
--- Servicio para rastrear objetos del juego
-local Workspace = game:GetService("Workspace")
+-- Evitar duplicados del script activos al mismo tiempo
+if _G.BasketballZeroAimbot then _G.BasketballZeroAimbot:Disconnect() end
+if game:GetService("CoreGui"):FindFirstChild("BasketballZeroGUI") then
+    game:GetService("CoreGui").BasketballZeroGUI:Destroy()
+end
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 
--- Función para buscar el aro en el mapa
-local function obtenerAro()
-    -- Busca el aro en la canasta (ajusta el nombre si el juego lo llama diferente)
-    local aro = Workspace:FindFirstChild("Rim", true) or Workspace:FindFirstChild("Hoop", true) or Workspace:FindFirstChild("Goal", true)
-    if aro and aro:IsA("BasePart") then
-        return aro
+-- Variable de control
+_G.AimbotActivo = true
+
+-- --- CREACIÓN DE INTERFAZ GRÁFICA (GUI) ---
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BasketballZeroGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+-- Botón Contenedor Principal (Flotante y Arrastrable)
+local MainButton = Instance.new("TextButton")
+MainButton.Size = UDim2.new(0, 160, 0, 45)
+MainButton.Position = UDim2.new(0.05, 0, 0.4, 0) -- Aparece en el lateral izquierdo
+MainButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Verde inicial
+MainButton.Text = "AUTO-SHOT: ON"
+MainButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MainButton.Font = Enum.Font.SourceSansBold
+MainButton.TextSize = 16
+MainButton.BorderSizePixel = 0
+MainButton.Parent = ScreenGui
+
+-- Esquinas redondeadas para el botón
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainButton
+
+-- Hacer el botón arrastrable con el mouse o dedo
+local dragging, dragInput, dragStart, startPos
+MainButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainButton.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
     end
-    return nil
-end
-
--- Función para redirigir la pelota al aro
-local function encestarPelota(pelota)
-    local aro = obtenerAro()
-    if aro and pelota then
-        -- Espera un instante a que la física actúe y la teletransporta al aro
-        task.wait(0.05)
-        pelota.AssemblyLinearVelocity = Vector3.new(0, 0, 0) -- Detiene la fuerza original
-        pelota.CFrame = aro.CFrame + Vector3.new(0, 2, 0) -- La coloca justo arriba del aro
+end)
+MainButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
     end
-end
-
--- Detectar cuándo aparece una pelota en el juego
-Workspace.DescendantAdded:Connect(function(objeto)
-    -- Ajusta "Ball" por el nombre exacto que use la pelota en Basketball Zero
-    if objeto.Name == "Ball" or objeto.Name == "Basketball" then
-        encestarPelota(objeto)
+end)
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 
-print("¡Script de asistencia de tiro activado con éxito!")
+-- --- LÓGICA DE DETECCIÓN DEL ARO ---
+local function obtenerAroMasCercano()
+    local aroObjetivo = nil
+    local distanciaMinima = math.huge
+    
+    for _, objeto in ipairs(Workspace:GetDescendants()) do
+        if (objeto.Name == "Rim" or objeto.Name == "Net" or objeto.Name == "SwishTrigger") and objeto:IsA("BasePart") then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local distancia = (objeto.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if distancia < distanciaMinima then
+                    distanciaMinima = distancia
+                    aroObjetivo = objeto
+                end
+            end
+        end
+    end
+    return aroObjetivo
+end
+
+-- --- INTERCEPCIÓN DEL TIRO (MÉTODO HOOK) ---
+local antiguoNamecall
+antiguoNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local metodo = getnamecallmethod()
+    local argumentos = {...}
+    
+    -- Solo modifica la dirección si el script está encendido (_G.AimbotActivo == true)
+    if _G.AimbotActivo and not checkcaller() and (metodo == "FireServer" or metodo == "InvokeServer") then
+        local aro = obtenerAroMasCercano()
+        if aro then
+            for i, arg in ipairs(argumentos) do
+                if typeof(arg) == "Vector3" then
+                    argumentos[i] = aro.Position + Vector3.new(0, 0.5, 0)
+                    break
+                end
+            end
+        end
+    end
+    
+    return antiguoNamecall(self, unpack(argumentos))
+end)
+
+-- --- EVENTO CLICK PARA ENCENDER / APAGAR ---
+MainButton.MouseButton1Click:Connect(function()
+    _G.AimbotActivo = not _G.AimbotActivo
+    
+    if _G.AimbotActivo then
+        -- Animación a color Verde
+        TweenService:Create(MainButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(46, 204, 113)}):Play()
+        MainButton.Text = "AUTO-SHOT: ON"
+    else
+        -- Animación a color Rojo
+        TweenService:Create(MainButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(231, 76, 60)}):Play()
+        MainButton.Text = "AUTO-SHOT: OFF"
+    end
+end)
+
+print("¡Interfaz de control cargada! Usa el botón en pantalla para alternar el script.")
