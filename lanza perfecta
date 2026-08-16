@@ -1,0 +1,167 @@
+-- Guardar referencias a los servicios principales de Roblox
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- 1. Crear el contenedor principal con máxima prioridad
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CustomDevInterface"
+-- Intentar colocarlo en CoreGui para estar por encima del menú de pausa
+-- Nota: En entornos de desarrollo estándar requiere privilegios elevados
+pcall(function()
+    ScreenGui.Parent = CoreGui
+end)
+if not ScreenGui.Parent then
+    ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+end
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999999 -- Máxima prioridad visual
+
+-- 2. Función genérica para permitir arrastrar elementos (PC y Móvil)
+local function MakeDraggable(frame)
+    local dragging, dragInput, dragStart, startPos
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
+-- 3. Crear el Panel Principal de la GUI
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 350, 0, 200)
+MainFrame.Position = UDim2.new(0.5, -175, 0.5, -100)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+MakeDraggable(MainFrame)
+
+-- Bordes redondeados para el panel principal
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+-- 4. Botón de Cerrar (X) - Superior Derecha
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.TextSize = 18
+CloseButton.Parent = MainFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+-- Acción de Cerrar todo el sistema
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- 5. Botón de Minimizar (-)
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Position = UDim2.new(1, -70, 0, 5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+MinimizeButton.Text = "-"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.Font = Enum.Font.SourceSansBold
+MinimizeButton.TextSize = 18
+MinimizeButton.Parent = MainFrame
+
+local MiniCorner = Instance.new("UICorner")
+MiniCorner.CornerRadius = UDim.new(0, 6)
+MiniCorner.Parent = MinimizeButton
+
+-- 6. Crear el Círculo Flotante (Oculto al inicio)
+local FloatingCircle = Instance.new("TextButton")
+FloatingCircle.Name = "FloatingCircle"
+FloatingCircle.Size = UDim2.new(0, 50, 0, 50)
+FloatingCircle.Position = UDim2.new(0.1, 0, 0.1, 0)
+FloatingCircle.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+FloatingCircle.Text = "GUI"
+FloatingCircle.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatingCircle.Font = Enum.Font.SourceSansBold
+FloatingCircle.TextSize = 14
+FloatingCircle.Visible = false
+FloatingCircle.Parent = ScreenGui
+MakeDraggable(FloatingCircle)
+
+-- Hacerlo perfectamente esférico
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1, 0)
+CircleCorner.Parent = FloatingCircle
+
+-- Lógica de alternancia (Minimizar / Maximizar)
+MinimizeButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    FloatingCircle.Visible = true
+end)
+
+FloatingCircle.MouseButton1Click:Connect(function()
+    FloatingCircle.Visible = false
+    MainFrame.Visible = true
+end)
+
+-- 7. Agregar Botón del Script de Simulación / Práctica
+local ActionButton = Instance.new("TextButton")
+ActionButton.Name = "ActionButton"
+ActionButton.Size = UDim2.new(0, 200, 0, 45)
+ActionButton.Position = UDim2.new(0.5, -100, 0.5, -10)
+ActionButton.BackgroundColor3 = Color3.fromRGB(0, 160, 100)
+ActionButton.Text = "Lanzamiento Perfecto (Modo Guía)"
+ActionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ActionButton.Font = Enum.Font.SourceSansBold
+ActionButton.TextSize = 16
+ActionButton.Parent = MainFrame
+
+local ActionCorner = Instance.new("UICorner")
+ActionCorner.CornerRadius = UDim.new(0, 6)
+ActionCorner.Parent = ActionButton
+
+-- Simulación informativa del script de baloncesto
+local isEnabled = false
+ActionButton.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    if isEnabled then
+        ActionButton.BackgroundColor3 = Color3.fromRGB(220, 130, 0)
+        ActionButton.Text = "Sistema Activo (Lanzando...)"
+        print("[Consola de Desarrollo]: Modo de asistencia de tiro activado visualmente.")
+    else
+        ActionButton.BackgroundColor3 = Color3.fromRGB(0, 160, 100)
+        ActionButton.Text = "Lanzamiento Perfecto (Modo Guía)"
+        print("[Consola de Desarrollo]: Asistencia desactivada.")
+    end
+end)
